@@ -1,5 +1,6 @@
-// Çevrimdışı çalışma: dosyalar ilk açılışta önbelleğe alınır.
-const CACHE = "harcama-takip-v1";
+// Önce internetten en güncel dosyayı al, internet yoksa önbellekten aç.
+// Bu sayede güncellemelerde sürüm numarasını değiştirmeye gerek kalmaz.
+const CACHE = "harcama-takip-v3";
 const FILES = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png", "icon-maskable-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -16,7 +17,16 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  if (new URL(e.request.url).origin !== location.origin) return; // Firebase gibi dış adreslere karışma
   e.respondWith(
-    caches.match(e.request).then((hit) => hit || fetch(e.request).catch(() => caches.match("index.html")))
+    fetch(e.request, { cache: "no-cache" })
+      .then((res) => {
+        if (res.ok && new URL(e.request.url).origin === location.origin) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request).then((hit) => hit || caches.match("index.html")))
   );
 });
